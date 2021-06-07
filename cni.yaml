@@ -1,0 +1,78 @@
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: istio-cni-node
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: 'docker/default,runtime/default'
+    apparmor.security.beta.kubernetes.io/allowedProfileNames: 'runtime/default'
+    seccomp.security.alpha.kubernetes.io/defaultProfileName:  'runtime/default'
+    apparmor.security.beta.kubernetes.io/defaultProfileName:  'runtime/default'
+spec:
+  allowedHostPaths:
+    - pathPrefix: "/opt/cni/bin"
+    - pathPrefix: "/etc/cni/net.d"
+    - pathPrefix: "/home/kubernetes/bin"
+  privileged: false
+  allowPrivilegeEscalation: true
+  defaultAllowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  # Allow non-persistent volume types.
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'hostPath'
+  hostNetwork: true
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    # Istio containers don't run as non-root, so until this is fixed, we have to permit this
+    rule: 'RunAsAny'
+  seLinux:
+    # This policy assumes the nodes are using AppArmor rather than SELinux.
+    rule: 'RunAsAny'
+  supplementalGroups:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+  readOnlyRootFilesystem: false
+
+---
+
+# Cluster role which grants access to the default pod security policy
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: psp-istio-cni-node
+rules:
+- apiGroups:
+  - policy
+  resourceNames:
+  - istio-cni-node
+  resources:
+  - podsecuritypolicies
+  verbs:
+  - use
+
+---
+
+# Cluster role binding for default pod security policy granting all authenticated users access
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: psp-istio-cni-node
+  namespace: istio-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: psp-istio-cni-node
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: system:nodes
+# For all service accounts in the kube-system namespace
+- kind: ServiceAccount
+  name: istio-cni
