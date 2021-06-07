@@ -1,0 +1,104 @@
+################################################
+# New role and role binding for cert manager csr
+###############################################
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  labels:
+    app.kubernetes.io/name: cert-manager-istio-csr
+    helm.sh/chart: cert-manager-istio-csr-v0.1.2
+    app.kubernetes.io/instance: RELEASE-NAME
+    app.kubernetes.io/version: "v0.1.2"
+    app.kubernetes.io/managed-by: Helm
+  name: cert-manager-istio-csr-istio-system-role
+  namespace: istio-system
+rules:
+- apiGroups:
+  - "cert-manager.io"
+  resources:
+  - "certificaterequests"
+  verbs:
+  - "get"
+  - "list"
+  - "create"
+  - "update"
+  - "delete"
+- apiGroups:
+  - "coordination.k8s.io"
+  resources:
+  - "leases"
+  verbs:
+  - "get"
+  - "create"
+  - "update"
+  - "watch"
+  - "list"
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+---
+# istio-csr given permission to create certificates in istio-system
+# Source: cert-manager-istio-csr/templates/rolebinding.yaml
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: cert-manager-istio-csr-istio-system-role-bind
+  namespace: istio-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cert-manager-istio-csr-istio-system-role
+subjects:
+- kind: ServiceAccount
+  name: cert-manager-istio-csr
+  namespace: cert-manager
+---
+##############################
+# Vault-Integration with Cert Manager
+##############################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: istio-system
+  name: vault-issuer
+---
+#######################################
+# Vault Istio CA Issuer
+######################################
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: vault-issuer
+  namespace: "istio-system"
+spec:
+  vault:
+    path: proving/pki/sign/prv1_dot_gke_dot_gcp_dot_nwminfra_dot_net
+    server: "https://vault.platform.nwminfra.net"
+    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUYxVENDQkwyZ0F3SUJBZ0lFV0tCSUhEQU5CZ2txaGtpRzl3MEJBUXNGQURCOE1Rc3dDUVlEVlFRR0V3Sm4KWWpFcE1DY0dBMVVFQ2hNZ1ZHaGxJRkp2ZVdGc0lFSmhibXNnYjJZZ1UyTnZkR3hoYm1RZ1IzSnZkWEF4SWpBZwpCZ05WQkFzVEdWQnliMlIxWTNScGIyNGdSekVnVUV0SklGTmxjblpwWTJVeEhqQWNCZ05WQkFNVEZWSkNVeUJICmJHOWlZV3dnUnpFZ1VtOXZkQ0JEUVRBZUZ3MHhOekF5TVRJeE1UQXpOVEJhRncwek56QXlNVEl4TVRNek5UQmEKTUh3eEN6QUpCZ05WQkFZVEFtZGlNU2t3SndZRFZRUUtFeUJVYUdVZ1VtOTVZV3dnUW1GdWF5QnZaaUJUWTI5MApiR0Z1WkNCSGNtOTFjREVpTUNBR0ExVUVDeE1aVUhKdlpIVmpkR2x2YmlCSE1TQlFTMGtnVTJWeWRtbGpaVEVlCk1Cd0dBMVVFQXhNVlVrSlRJRWRzYjJKaGJDQkhNU0JTYjI5MElFTkJNSUlCSWpBTkJna3Foa2lHOXcwQkFRRUYKQUFPQ0FROEFNSUlCQ2dLQ0FRRUE3WEw5ZzNmQTQ2Wm0rRFZBbzRicC9iT09zc0ZoY255L0NKdzhLcXhncU92eAp5ZmRYMTk3TkRUR2xSZyswRWVnNk80MGlwZlFxaFJYTDlYaHZ2UWlFSFJJWWkzaG9mRXZ2WmJuR0RKMWtIeWxsClZXemZ5Z1pYdGpNV0pZeWZwN0JsdXU2MzJMdmlYamt5V3g3R0orb2UvaGU5RHZwUDJYQXppYzdYOGswTVFqcVcKRlVhTWN5aG1hd01lN2FoMHBlTTd5dUVtbnBXSkFXbTNhYjBoc05JblNnMDQwNUp3SWZodVJNSW10YlViR2YwaQpjVG1UOXcyc2UrTVl6cTAvUzFrQjZ2dkVHU0xYQmNkMnBlUzVvTWxWUGhHRDJRRUQ2R1MxUGkrZlpVK1FZRjh3CkRUQjBobzZvNkhtemcvZi9WdmhBQjNDbmt3ei9TOGgvc0dWUkpERHl0UUlEQVFBQm80SUNYVENDQWxrd2dnSDAKQmdOVkhTQUVnZ0hyTUlJQjV6Q0NBZU1HQ2lxR09nQUNoY0ZJWkFFd2dnSFRNSUlCendZSUt3WUJCUVVIQWdJdwpnZ0hCR29JQnZWUm9hWE1nYzJWc1ppMXphV2R1WldRZ1IyVnVaWEpoZEdsdmJpQlBibVVnVW05dmRDQkRRU0JqClpYSjBhV1pwWTJGMFpTQnBjeUJwYzNOMVpXUWdkVzVrWlhJZ2RHaHBjeUJ3YjJ4cFkza2dZbmtnZEdobElFZGwKYm1WeVlYUnBiMjRnVDI1bElGSnZiM1FnUTBFZ2IyWWdWR2hsSUZKdmVXRnNJRUpoYm1zZ2IyWWdVMk52ZEd4aApibVF1SUZSb1pTQkhaVzVsY21GMGFXOXVJRTl1WlNCU2IyOTBJRU5CSUdseklHZHZkbVZ5Ym1Wa0lHRmpZMjl5ClpHbHVaeUIwYnlCemRHRnVaR0Z5WkhNZ1lYQndjbTkyWldRZ2RHaGxJRkpDVXlCSGNtOTFjQ0JRUzBrZ1VHOXMKYVdONUlFRjFkR2h2Y21sMGVTd2djSFZpYkdsemFHVmtJR2x1SUdsMGN5QkRaWEowYVdacFkyRjBhVzl1SUZCeQpZV04wYVdObElGTjBZWFJsYldWdWRDNGdWR2hwY3lCalpYSjBhV1pwWTJGMFpTQnRZWGtnWW1VZ2RYTmxaQ0IwCmJ5QjJaWEpwWm5rZ2RHaGxJSE5wWjI1aGRIVnlaU0J2WmlCMGFHVWdSMlZ1WlhKaGRHbHZiaUJQYm1VZ1VtOXYKZENCRFFTQnZiaUIwYUdVZ1kyVnlkR2xtYVdOaGRHVnpJR0Z1WkNCRFpYSjBhV1pwWTJGMFpTQlNaWFp2WTJGMAphVzl1SUV4cGMzUnpJR2wwSUdsemMzVmxjeTR3RGdZRFZSMFBBUUgvQkFRREFnRUdNQThHQTFVZEV3RUIvd1FGCk1BTUJBZjh3SHdZRFZSMGpCQmd3Rm9BVU10YkI2T0V2RnZNZGdTNU1HcW53UUVjVDBuTXdIUVlEVlIwT0JCWUUKRkRMV3dlamhMeGJ6SFlFdVRCcXA4RUJIRTlKek1BMEdDU3FHU0liM0RRRUJDd1VBQTRJQkFRQ094UmVLdkszcAp1N2NhNFFnemk2SmRSaEVmMjlSYUwySStGcmJIVGNFZHkyeVlRbERhRzhNanZ6amVaRC9kcisyWEVNb0J2SkdLCkNRaWQ1TVBYelc2T3o0cFV0NHo4d1l0UHNnUEtKYjJPbDEyYkRhcXNyUGFRYWZuODhBNGFVME1oMmtkbjQzd1oKYkl5SEFpbUVyMXBOZkMxUW1abURqZFhWTjlHR1pOWjgzY2NlaDFGYXZXd0dEV2w4a0ZrcDBKdXpkT1RiTG1TawpKVnJIOUtySmJ5WStOS0VPcloyK2ovTHoyS0MvbTRsanNnVTIwT3FaNGc5MytjRDlQZmdFYlZNVEdHMTJMaTVuCjNUais3YzFHS21JQjEvTlJTZDZ2aUlVaEdHV2xIL1NYZGlJdGdmSStRaDdXcFVkVGNpN0RaNHcwMkVmaW1wNUIKYS9wU1NXWGVlQklECi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0KLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUhTRENDQmpDZ0F3SUJBZ0lFV0tCVk5qQU5CZ2txaGtpRzl3MEJBUXNGQURCOE1Rc3dDUVlEVlFRR0V3Sm4KWWpFcE1DY0dBMVVFQ2hNZ1ZHaGxJRkp2ZVdGc0lFSmhibXNnYjJZZ1UyTnZkR3hoYm1RZ1IzSnZkWEF4SWpBZwpCZ05WQkFzVEdWQnliMlIxWTNScGIyNGdSekVnVUV0SklGTmxjblpwWTJVeEhqQWNCZ05WQkFNVEZWSkNVeUJICmJHOWlZV3dnUnpFZ1VtOXZkQ0JEUVRBZUZ3MHhPREF4TWpBeE5ESTFNekJhRncwek16QXhNakF4TkRVMU16QmEKTUg4eEN6QUpCZ05WQkFZVEFtZGlNU2t3SndZRFZRUUtFeUJVYUdVZ1VtOTVZV3dnUW1GdWF5QnZaaUJUWTI5MApiR0Z1WkNCSGNtOTFjREVpTUNBR0ExVUVDeE1aVUhKdlpIVmpkR2x2YmlCSE1TQlFTMGtnVTJWeWRtbGpaVEVoCk1COEdBMVVFQXhNWVVrSlRJRWRzYjJKaGJDQkhNU0JKYzNOMWFXNW5JRU5CTUlJQklqQU5CZ2txaGtpRzl3MEIKQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBczdqdGpxeDRXNENLaXB5MWRRZjkvWjdkSkdZeTlnVUFhNDFKQ0RNQQpCT2N3aVZrYnc1S2lTODhYVEhJRThNQXFKVUIwOEJHMURheUdIYnVWelZNUnZYNEZ1ZjB4UDMzRVZ4ZjZGWFBQCkl1dVBKK3FEVDV4WnBHWjNjL2V6RUNRbXdmQ0JEN09uS0dwY1pwYXNCVWlMRjVMT2FSa0xvd09PU050dUVNZ2wKUUVXSTVTTlFPbGwyUW9SYTlGUmgvODF6SmM2MmhEdGM0L1BKWEFNSFI5TkRXbElmcXlSekQ0N1hSdGNETzJ6QgoyUlBoTVV2d01XdXA2TzZwT3Z0cW04ZEtTOUtPcXJHVWhpR0J3a3h4Y2IwS0g5K2hmWS95MVl0Q0lBZjFCRHBTCkpnY2orMUFFSmxwZk1yQldEWlQyQ2lrYkF0Q3BKN25ZbXlxSi92Ykd5U3hVd1FJREFRQUJvNElEelRDQ0E4a3cKRGdZRFZSMFBBUUgvQkFRREFnRUdNQThHQTFVZEV3RUIvd1FGTUFNQkFmOHdnZ0hEQmdOVkhTQUVnZ0c2TUlJQgp0akNDQWJJR0NpcUdPZ0FDaGNGSVpBRXdnZ0dpTUlJQm5nWUlLd1lCQlFVSEFnSXdnZ0dRR29JQmpFTmxjblJwClptbGpZWFJsSUVGMWRHaHZjbWwwZVNCalpYSjBhV1pwWTJGMFpYTWdZWEpsSUdsemMzVmxaQ0IxYm1SbGNpQjAKYUdseklIQnZiR2xqZVNCMGJ5QkRRWE1nZEdoaGRDQnZjR1Z5WVhSbElHRnpJR0VnYzNWaWIzSmthVzVoZEdVZwpRMEVnYVc0Z2NtVnNZWFJwYjI0Z2RHOGdkR2hsSUVkbGJtVnlZWFJwYjI0Z1QyNWxJRkp2YjNRZ1EwRWdiMllnClZHaGxJRkp2ZVdGc0lFSmhibXNnYjJZZ1UyTnZkR3hoYm1RdUlGUm9aU0JIWlc1bGNtRjBhVzl1SUU5dVpTQlMKYjI5MElFTkJJRzltSUZSb1pTQlNiM2xoYkNCQ1lXNXJJRzltSUZOamIzUnNZVzVrSUdGdVpDQjBhR2x6SUVsegpjM1ZwYm1jZ1EwRWdiM0JsY21GMFpTQmhZMk52Y21ScGJtY2dkRzhnYzNSaGJtUmhjbVJ6SUdGd2NISnZkbVZrCklHSjVJSFJvWlNCU1FsTWdSM0p2ZFhBZ1VFdEpJRkJ2YkdsamVTQkJkWFJvYjNKcGRIa3NJSEIxWW14cGMyaGwKWkNCcGJpQjBhR1ZwY2lCeVpYTndaV04wYVhabElFTmxjblJwWm1sallYUnBiMjRnVUhKaFkzUnBZMlVnVTNSaApkR1Z0Wlc1MExqQ0NBWjBHQTFVZEh3U0NBWlF3Z2dHUU1JSUJqS0NDQVlpZ2dnR0VoakpvZEhSd09pOHZaMlZ1Ck1XTmxjblJ6TG5kbFlpNXlZbk5uY25BdWJtVjBMME5TVEM5blpXNHhjbTl2ZEdFeExtTnliSWFCdkd4a1lYQTYKTHk5bmJHOWlZV3huWlc0eGNHdHBaR2x5TG14aU1TNXlZbk5uY25BdWJtVjBMMk51UFVOU1RERXNZMjQ5VWtKVApKVEl3UjJ4dlltRnNKVEl3UnpFbE1qQlNiMjkwSlRJd1EwRXNiM1U5VUhKdlpIVmpkR2x2YmlVeU1FY3hKVEl3ClVFdEpKVEl3VTJWeWRtbGpaU3h2UFZSb1pTVXlNRkp2ZVdGc0pUSXdRbUZ1YXlVeU1HOW1KVEl3VTJOdmRHeGgKYm1RbE1qQkhjbTkxY0N4alBXZGlQMkYxZEdodmNtbDBlVkpsZG05allYUnBiMjVNYVhOMHBJR09NSUdMTVFzdwpDUVlEVlFRR0V3Sm5ZakVwTUNjR0ExVUVDaE1nVkdobElGSnZlV0ZzSUVKaGJtc2diMllnVTJOdmRHeGhibVFnClIzSnZkWEF4SWpBZ0JnTlZCQXNUR1ZCeWIyUjFZM1JwYjI0Z1J6RWdVRXRKSUZObGNuWnBZMlV4SGpBY0JnTlYKQkFNVEZWSkNVeUJIYkc5aVlXd2dSekVnVW05dmRDQkRRVEVOTUFzR0ExVUVBeE1FUTFKTU1UQWZCZ05WSFNNRQpHREFXZ0JReTFzSG80UzhXOHgyQkxrd2FxZkJBUnhQU2N6QWRCZ05WSFE0RUZnUVU4NEVYcXM3TDlZdmxNNzA4CklWZVRCalZsZkUwd0RRWUpLb1pJaHZjTkFRRUxCUUFEZ2dFQkFBWCtsN05wWlJrZVNYRGx4Yll1bVhJSGplMTUKdHp1MmdDSjQvS04vUHEwWjBERUozTGxWaW1sZ2IwaHRKY1hzazJXaEZZYWlNdG1WTG9wUDMvNHU3NW9zWHVjMApGMUtzakV5dEcrL01SQzVUY01BQkd4R1FVZTErNENwU3krWUxQd093c0xDQzZKb3g0R2dtU3JrMjFTWFRpaitVCk0vL0ovZ1lPV0ZHYkJwNUE0VEd2TlV3MWFmM3BiemozMmRHcjdjQnVWR2t5bkhJMGFMVEZURXJUT2Z4UWk2d0YKMStxT1Iycy9jYmhVK3gvT0trdGJqNlRjV21NYVViWFA5RWNTbUd4cVRxcCtoUDQ5TUYyZk5pbHZUb2JoWDh4SApxRTVGNkt6WC9mRnJoWVZzN3oxMmZRWXdrQ0V6OG9kUUZ6ZlRhYUVzUlZrdGlCRFJ1dUFuN01mQVlhYz0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo=
+    auth:
+      kubernetes:
+        role: istio-system
+        mountPath: /v1/auth/kubernetes/prv1-maximum-crappie-298796-gke-cluster
+        secretRef:
+          name: vault-issuer-token-qc5rs
+          key: token
+---
+# Source: cert-manager-istio-csr/templates/certificate.yaml
+# this will be used to sign the other csr
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: istiod
+  namespace: "istio-system"
+spec:
+  duration: 24h
+  renewBefore: 12h
+  secretName: istiod-tls
+  dnsNames:
+  - istiod.istio-system.svc
+  uris:
+    - spiffe://cluster.local/ns/istio-system/sa/istiod-service-account
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: vault-issuer
