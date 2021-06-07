@@ -1,0 +1,74 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+  name: istio-operator-vault-csr-cert-issued
+spec:
+  hub: nwm-docker-repo.artifactory.platform.nwminfra.net/istio
+  profile: default
+  meshConfig:
+    accessLogFile: /dev/stdout
+    enableTracing: true
+    # Change the following line to configure the trust domain of the Istio cluster domain for cert
+    trustDomain: cluster.local
+  values:
+    cni:
+      cniBinDir: /home/kubernetes/bin
+      excludeNamespaces:
+        - istio-system
+        - kube-system
+      logLevel: info 
+    global:
+      imagePullSecrets:
+      - artifactory-dockerconfig
+      # Change certificate provider to cert-manager istio agent for istio agent changed //cert-manager-istio-csr-craig.istio-system.svc:443
+      caAddress: cert-manager-istio-csr.cert-manager.svc:443
+  components:
+    ingressGateways:
+    - name: istio-ingressgateway
+      enabled: false
+    egressGateways:
+    - name: istio-egressgateway
+      enabled: false
+    cni:
+      enabled: true
+      namespace: istio-system
+    pilot:
+      k8s:
+        env:
+          # Disable istiod CA Sever functionality
+        - name: ENABLE_CA_SERVER
+          value: "false"
+        overlays:
+        - apiVersion: apps/v1
+          kind: Deployment
+          name: istiod
+          patches:
+          # Mount istiod serving and webhook certificate from Secret mount
+          - path: spec.template.spec.containers.[name:discovery].args[7]
+            value: "--tlsCertFile=/etc/cert-manager/tls/tls.crt"
+          - path: spec.template.spec.containers.[name:discovery].args[8]
+            value: "--tlsKeyFile=/etc/cert-manager/tls/tls.key"
+          - path: spec.template.spec.containers.[name:discovery].args[9]
+            value: "--caCertFile=/etc/cert-manager/ca/root-cert.pem"
+          - path: spec.template.spec.containers.[name:discovery].volumeMounts[6]
+            value:
+              name: cert-manager
+              mountPath: "/etc/cert-manager/tls"
+              readOnly: true
+          - path: spec.template.spec.containers.[name:discovery].volumeMounts[7]
+            value:
+              name: ca-root-cert
+              mountPath: "/etc/cert-manager/ca"
+              readOnly: true
+          - path: spec.template.spec.volumes[6]
+            value:
+              name: cert-manager
+              secret:
+                secretName: istiod-tls
+          - path: spec.template.spec.volumes[7]
+            value:
+              name: ca-root-cert
+              configMap:
+                defaultMode: 420
+                name: istio-ca-root-cert
